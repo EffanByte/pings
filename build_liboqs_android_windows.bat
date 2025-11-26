@@ -9,12 +9,33 @@ REM   - Ninja build system installed (or use "Unix Makefiles" generator if Ninja
 setlocal enabledelayedexpansion
 
 REM ===== Configuration =====
-set "NDK_PATH=D:\Tools\AndroidSDK\ndk\27.0.12077973"
 set "ABI=arm64-v8a"
 set "ANDROID_PLATFORM=android-21"
 set "BUILD_TYPE=Release"
 set "LIBOQS_REPO=https://github.com/open-quantum-safe/liboqs.git"
 set "BUILD_DIR=build_android_%ABI%"
+
+REM ===== Auto-detect NDK path =====
+if not defined NDK_PATH (
+    if defined ANDROID_NDK (
+        set "NDK_PATH=%ANDROID_NDK%"
+    ) else if defined ANDROID_SDK_ROOT (
+        REM Find the latest NDK in ANDROID_SDK_ROOT/ndk/
+        for /d %%D in ("%ANDROID_SDK_ROOT%\ndk\*") do (
+            set "NDK_PATH=%%D"
+        )
+    ) else if defined ANDROID_HOME (
+        for /d %%D in ("%ANDROID_HOME%\ndk\*") do (
+            set "NDK_PATH=%%D"
+        )
+    ) else (
+        REM Try common default location
+        for /d %%D in ("%LOCALAPPDATA%\Android\sdk\ndk\*") do (
+            set "NDK_PATH=%%D"
+        )
+    )
+)
+
 REM ===== Verify prerequisites =====
 echo Checking prerequisites...
 where cmake >nul 2>&1
@@ -22,24 +43,36 @@ if errorlevel 1 (
     echo ERROR: CMake not found. Install CMake and add to PATH.
     exit /b 1
 )
-where ninja >nul 2>&1
-if errorlevel 1 (
+
+REM Find ninja executable path
+for /f "delims=" %%i in ('where ninja 2^>nul') do set "NINJA_EXE=%%i"
+if not defined NINJA_EXE (
     echo WARNING: Ninja not found. Attempting to use Unix Makefiles instead.
     set "CMAKE_GENERATOR=Unix Makefiles"
+    set "CMAKE_MAKE_PROGRAM="
 ) else (
     set "CMAKE_GENERATOR=Ninja"
+    set "CMAKE_MAKE_PROGRAM=%NINJA_EXE%"
 )
 
-if not exist "%NDK_PATH%" (
-    echo ERROR: NDK not found at %NDK_PATH%
+if not defined NDK_PATH (
+    echo ERROR: NDK not found. Set ANDROID_NDK, ANDROID_SDK_ROOT, ANDROID_HOME, or pass --ndk-path
+    exit /b 1
+)
+
+if not exist "%NDK_PATH%\build\cmake\android.toolchain.cmake" (
+    echo ERROR: NDK toolchain not found at %NDK_PATH%
+    echo Looked for: %NDK_PATH%\build\cmake\android.toolchain.cmake
     exit /b 1
 )
 
 echo Prerequisites OK.
 echo   CMake: Found
 echo   NDK: %NDK_PATH%
+echo   Ninja: %NINJA_EXE%
 echo   ABI: %ABI%
 echo   Generator: %CMAKE_GENERATOR%
+echo.
 
 REM ===== Clone or update liboqs =====
 if not exist "liboqs" (
@@ -63,16 +96,28 @@ cd "%BUILD_DIR%"
 
 REM ===== Run CMake with Android NDK toolchain =====
 echo Running CMake...
-cmake .. ^
-  -G "%CMAKE_GENERATOR%" ^
-  -D CMAKE_MAKE_PROGRAM:PATH=D:\Tools\AndroidSDK\cmake\4.1.2\bin\ninja.exe ^
-  -DCMAKE_TOOLCHAIN_FILE="%NDK_PATH%\build\cmake\android.toolchain.cmake" ^
-  -DANDROID_ABI=%ABI% ^
-  -DANDROID_PLATFORM=%ANDROID_PLATFORM% ^
-  -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
-  -DBUILD_SHARED_LIBS=ON ^
-  -DOQS_USE_OPENSSL=OFF ^
-  -DOQS_BUILD_ONLY_LIB=ON
+if defined CMAKE_MAKE_PROGRAM (
+    cmake .. ^
+      -G "%CMAKE_GENERATOR%" ^
+      -DCMAKE_MAKE_PROGRAM="%CMAKE_MAKE_PROGRAM%" ^
+      -DCMAKE_TOOLCHAIN_FILE="%NDK_PATH%\build\cmake\android.toolchain.cmake" ^
+      -DANDROID_ABI=%ABI% ^
+      -DANDROID_PLATFORM=%ANDROID_PLATFORM% ^
+      -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
+      -DBUILD_SHARED_LIBS=ON ^
+      -DOQS_USE_OPENSSL=OFF ^
+      -DOQS_BUILD_ONLY_LIB=ON
+) else (
+    cmake .. ^
+      -G "%CMAKE_GENERATOR%" ^
+      -DCMAKE_TOOLCHAIN_FILE="%NDK_PATH%\build\cmake\android.toolchain.cmake" ^
+      -DANDROID_ABI=%ABI% ^
+      -DANDROID_PLATFORM=%ANDROID_PLATFORM% ^
+      -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
+      -DBUILD_SHARED_LIBS=ON ^
+      -DOQS_USE_OPENSSL=OFF ^
+      -DOQS_BUILD_ONLY_LIB=ON
+)
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed.
@@ -107,10 +152,15 @@ echo Output: %OUTPUT_SO%
 echo.
 echo Next steps:
 echo 1. Copy liboqs.so to your Android project:
-echo    Copy-Item "%OUTPUT_SO%" -Destination "..\..\..\..\..\..\pings\android\app\src\main\jniLibs\%ABI%\liboqs.so"
+echo    mkdir android\app\src\main\jniLibs\%ABI%
+echo    copy "%OUTPUT_SO%" android\app\src\main\jniLibs\%ABI%\liboqs.so
 echo.
-echo 2. Build the Flutter app:
-echo    cd D:\IS-Project\pings\android
+echo 2. Copy oqs headers:
+echo    mkdir android\app\src\main\cpp\oqs_include
+echo    xcopy /E /I liboqs\include\oqs android\app\src\main\cpp\oqs_include\oqs
+echo.
+echo 3. Build the Flutter app:
+echo    cd android
 echo    gradlew assembleDebug
 echo.
 
