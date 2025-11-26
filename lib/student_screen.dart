@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'constants.dart';
+import 'crypto/falcon_ffi.dart';
 
 class StudentScreen extends StatefulWidget {
   @override
@@ -95,11 +96,19 @@ class _StudentScreenState extends State<StudentScreen> {
 
   void _onPayloadReceived(String endpointId, Payload payload) {
     if (payload.type == PayloadType.BYTES) {
-      String msg = String.fromCharCodes(payload.bytes!);
+      final bytes = payload.bytes!;
+      String msg = String.fromCharCodes(bytes);
       _log("Received from Instructor: $msg");
 
       if (msg.contains("CHALLENGE_KEY")) {
-        _sendAttendance(endpointId);
+        // sign the raw challenge bytes using native Falcon via FFI
+        _log("Signing challenge with Falcon-512...");
+        FalconCrypto.instance.signChallenge(Uint8List.fromList(bytes)).then((sig) {
+          Nearby().sendBytesPayload(endpointId, sig);
+          _log("Sent Falcon signature (length: ${sig.length})");
+        }).catchError((e) {
+          _log("Failed to sign challenge: $e");
+        });
       }
     }
   }
