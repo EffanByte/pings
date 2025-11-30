@@ -1,30 +1,53 @@
-cmake_minimum_required(VERSION 3.4.1)
-project(falcon_bridge)
+cmake_minimum_required(VERSION 3.10)
+project(student)
 
-add_library(falcon_bridge SHARED
-    falcon_bridge.c
+# 2) Configure liboqs itself
+set(OQS_USE_OPENSSL OFF)
+set(OQS_BUILD_ONLY_LIB ON)
+
+# Disable problematic algorithm families that cause build issues on Android ARM64
+set(OQS_ENABLE_KEM_BIKE OFF)
+set(OQS_ENABLE_KEM_FRODOKEM OFF)
+set(OQS_ENABLE_KEM_NTRUPRIME OFF)
+set(OQS_ENABLE_KEM_CLASSIC_MCELIECE OFF)
+set(OQS_ENABLE_KEM_HQC OFF)
+set(OQS_ENABLE_SIG_DILITHIUM OFF)
+set(OQS_ENABLE_SIG_ML_DSA OFF)
+set(OQS_ENABLE_SIG_SPHINCS OFF)
+set(OQS_ENABLE_SIG_MAYO OFF)
+set(OQS_ENABLE_SIG_CROSS OFF)
+set(OQS_ENABLE_SIG_UOV OFF)
+set(OQS_ENABLE_SIG_SNOVA OFF)
+
+# Disable Falcon variants you don't need (keep only falcon_512)
+set(OQS_ENABLE_SIG_falcon_1024 OFF)
+set(OQS_ENABLE_SIG_falcon_padded_512 OFF)
+set(OQS_ENABLE_SIG_falcon_padded_1024 OFF)
+
+add_subdirectory(liboqs EXCLUDE_FROM_ALL)
+
+# 1) Point the compiler at the liboqs public headers
+#    (where oqs/oqs.h lives) - use the build directory where headers are generated
+include_directories(
+  "${CMAKE_CURRENT_BINARY_DIR}/liboqs/include"
 )
 
-# Try to find liboqs library (built and copied to jniLibs/<abi>/)
-find_library(OQS_LIB oqs)
+# 3) Our JNI wrapper
+add_library(pqc_wrapper SHARED
+  pqc_wrapper.cpp
+)
 
-if (OQS_LIB)
-    message(STATUS "Found liboqs: ${OQS_LIB}")
-    target_link_libraries(falcon_bridge PRIVATE ${OQS_LIB})
-    target_compile_definitions(falcon_bridge PRIVATE HAVE_LIBOQS=1)
-else()
-    message(WARNING "liboqs library not found. Building falcon_bridge as stub (will return errors at runtime).")
-    message(STATUS "To enable Falcon-512, ensure liboqs.so is in jniLibs/<abi>/ and oqs.h is available.")
-endif()
+# (If you need any internal headers from the liboqs src tree, you can also add:)
+target_include_directories(pqc_wrapper PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/liboqs/src"
+)
 
-# Try to find oqs headers
-find_path(OQS_INCLUDE_DIR oqs/oqs.h)
-if (OQS_INCLUDE_DIR)
-    message(STATUS "Found oqs headers at: ${OQS_INCLUDE_DIR}")
-    target_include_directories(falcon_bridge PRIVATE ${OQS_INCLUDE_DIR})
-else()
-    message(WARNING "oqs/oqs.h not found. Build will still work but functions may fail at runtime if liboqs is not linked.")
-endif()
+# 4) Android log lib
+find_library(log-lib log)
 
-# Include current source dir for header
-target_include_directories(falcon_bridge PRIVATE ${CMAKE_SOURCE_DIR})
+# 5) Link against liboqs + log
+target_link_libraries(
+  pqc_wrapper
+  oqs        # the target name created by liboqs's CMakeLists
+  ${log-lib}
+)
