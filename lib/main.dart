@@ -10,6 +10,8 @@ void main() {
 }
 
 class HomeSelectionScreen extends StatelessWidget {
+  const HomeSelectionScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -5,6 +5,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'constants.dart'; // Import your constants
 
 class InstructorScreen extends StatefulWidget {
+  const InstructorScreen({super.key});
+
   @override
   _InstructorScreenState createState() => _InstructorScreenState();
 }

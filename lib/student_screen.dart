@@ -7,6 +7,8 @@ import 'constants.dart';
 import 'crypto/falcon_ffi.dart';
 
 class StudentScreen extends StatefulWidget {
+  const StudentScreen({super.key});
+
   @override
   _StudentScreenState createState() => _StudentScreenState();
 }
@@ -49,8 +51,9 @@ class _StudentScreenState extends State<StudentScreen> {
         onEndpointLost: (dynamic endpoint) {
           String id = 'unknown';
           try {
-            if (endpoint is String) id = endpoint;
-            else if (endpoint != null) {
+            if (endpoint is String) {
+              id = endpoint;
+            } else if (endpoint != null) {
               // common property names across versions
               id = (endpoint.endpointId ?? endpoint.id ?? endpoint.toString()) as String;
             }
@@ -141,10 +144,10 @@ class _StudentScreenState extends State<StudentScreen> {
             padding: const EdgeInsets.all(8.0),
             child: ElevatedButton(
               onPressed: connectedInstructorId == null ? startDiscovery : null,
-              child: Text(connectedInstructorId == null ? "Scan for Class" : "Connected"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: connectedInstructorId == null ? Colors.blue : Colors.green
               ),
+              child: Text(connectedInstructorId == null ? "Scan for Class" : "Connected"),
             ),
           ),
           Expanded(

@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <oqs/oqs.h>
 
 // Helper to throw a Java exception from C++
@@ -13,6 +14,8 @@ void ThrowJNIException(JNIEnv *env, const char *message) {
 
 // Define the signature algorithm to use
 const char *sig_alg = "Falcon-512";
+
+// ========================= JNI HELPERS (unused by Flutter, kept for completeness) =========================
 
 extern "C"
 JNIEXPORT jobject JNICALL
@@ -122,3 +125,108 @@ Java_com_example_instructor_MainActivity_verifyFalconSignatureJNI(JNIEnv *env, j
 
     return (result == OQS_SUCCESS) ? JNI_TRUE : JNI_FALSE;
 }
+
+// ========================= C FFI EXPORTS FOR FLUTTER =========================
+
+extern "C" {
+
+// FFI signature expected by Dart:
+// int32 generate_keypair(uint8_t* pub, uint64_t* pub_len,
+//                        uint8_t* priv, uint64_t* priv_len);
+int32_t generate_keypair(uint8_t *pub, uint64_t *pub_len,
+                         uint8_t *priv, uint64_t *priv_len) {
+    OQS_SIG *sig = OQS_SIG_new(sig_alg);
+    if (sig == nullptr) {
+        return -1;
+    }
+
+    // If buffers are too small, report required sizes and return -2
+    if (*pub_len < sig->length_public_key || *priv_len < sig->length_secret_key) {
+        *pub_len = sig->length_public_key;
+        *priv_len = sig->length_secret_key;
+        OQS_SIG_free(sig);
+        return -2;
+    }
+
+    OQS_STATUS rc = OQS_SIG_keypair(sig, pub, priv);
+    if (rc != OQS_SUCCESS) {
+        OQS_SIG_free(sig);
+        return -1;
+    }
+
+    *pub_len = sig->length_public_key;
+    *priv_len = sig->length_secret_key;
+
+    OQS_SIG_free(sig);
+    return 0;
+}
+
+// FFI signature expected by Dart:
+// int32 sign_message(uint8_t* priv, uint64_t priv_len,
+//                    uint8_t* msg, uint64_t msg_len,
+//                    uint8_t* sig_out, uint64_t* sig_len);
+int32_t sign_message(uint8_t *priv, uint64_t priv_len,
+                     uint8_t *msg, uint64_t msg_len,
+                     uint8_t *sig_out, uint64_t *sig_len) {
+    (void)priv_len; // lengths are implied by the algorithm; keep for API symmetry
+
+    OQS_SIG *sig = OQS_SIG_new(sig_alg);
+    if (sig == nullptr) {
+        return -1;
+    }
+
+    // If caller's buffer is too small, tell them required length
+    if (*sig_len < sig->length_signature) {
+        *sig_len = sig->length_signature;
+        OQS_SIG_free(sig);
+        return -2;
+    }
+
+    size_t out_len = 0;
+    OQS_STATUS rc = OQS_SIG_sign(
+        sig,
+        sig_out,
+        &out_len,
+        msg,
+        static_cast<size_t>(msg_len),
+        priv
+    );
+
+    if (rc != OQS_SUCCESS) {
+        OQS_SIG_free(sig);
+        return -1;
+    }
+
+    *sig_len = static_cast<uint64_t>(out_len);
+    OQS_SIG_free(sig);
+    return 0;
+}
+
+// FFI signature expected by Dart:
+// int32 verify_signature(uint8_t* msg, uint64_t msg_len,
+//                        uint8_t* sig, uint64_t sig_len,
+//                        uint8_t* pub, uint64_t pub_len);
+int32_t verify_signature(uint8_t *msg, uint64_t msg_len,
+                         uint8_t *sig_buf, uint64_t sig_len,
+                         uint8_t *pub, uint64_t pub_len) {
+    (void)pub_len; // not required by liboqs, but included for symmetry
+
+    OQS_SIG *sig = OQS_SIG_new(sig_alg);
+    if (sig == nullptr) {
+        return -1;
+    }
+
+    int rc = OQS_SIG_verify(
+        sig,
+        msg,
+        static_cast<size_t>(msg_len),
+        sig_buf,
+        static_cast<size_t>(sig_len),
+        pub
+    );
+
+    OQS_SIG_free(sig);
+    return (rc == OQS_SUCCESS) ? 0 : -1;
+}
+
+} // extern "C"

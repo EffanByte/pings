@@ -1,10 +1,8 @@
 import 'dart:async';
 import 'dart:ffi';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 final _secureStorage = FlutterSecureStorage();
@@ -23,7 +21,7 @@ class FalconCrypto {
     if (_dylib != null) return;
     try {
       if (defaultTargetPlatform == TargetPlatform.android) {
-        _dylib = DynamicLibrary.open('libfalcon_bridge.so');
+        _dylib = DynamicLibrary.open('libpqc_wrapper.so');
       } else if (defaultTargetPlatform == TargetPlatform.iOS) {
         _dylib = DynamicLibrary.process();
       } else {
@@ -35,17 +33,61 @@ class FalconCrypto {
     }
 
     if (_dylib != null) {
-      _generateKeypairNative = _dylib!.lookupFunction<
-          Int32 Function(Pointer<Uint8>, Pointer<Uint64>, Pointer<Uint8>, Pointer<Uint64>),
-          int Function(Pointer<Uint8>, Pointer<Uint64>, Pointer<Uint8>, Pointer<Uint64>)>('generate_keypair');
+      _generateKeypairNative = _dylib!
+          .lookupFunction<
+            Int32 Function(
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+            ),
+            int Function(
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+            )
+          >('generate_keypair');
 
-      _signNative = _dylib!.lookupFunction<
-          Int32 Function(Pointer<Uint8>, Uint64, Pointer<Uint8>, Uint64, Pointer<Uint8>, Pointer<Uint64>),
-          int Function(Pointer<Uint8>, int, Pointer<Uint8>, int, Pointer<Uint8>, Pointer<Uint64>)>('sign_message');
+      _signNative = _dylib!
+          .lookupFunction<
+            Int32 Function(
+              Pointer<Uint8>,
+              Uint64,
+              Pointer<Uint8>,
+              Uint64,
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+            ),
+            int Function(
+              Pointer<Uint8>,
+              int,
+              Pointer<Uint8>,
+              int,
+              Pointer<Uint8>,
+              Pointer<Uint64>,
+            )
+          >('sign_message');
 
-      _verifyNative = _dylib!.lookupFunction<
-          Int32 Function(Pointer<Uint8>, Uint64, Pointer<Uint8>, Uint64, Pointer<Uint8>, Uint64),
-          int Function(Pointer<Uint8>, int, Pointer<Uint8>, int, Pointer<Uint8>, int)>('verify_signature');
+      _verifyNative = _dylib!
+          .lookupFunction<
+            Int32 Function(
+              Pointer<Uint8>,
+              Uint64,
+              Pointer<Uint8>,
+              Uint64,
+              Pointer<Uint8>,
+              Uint64,
+            ),
+            int Function(
+              Pointer<Uint8>,
+              int,
+              Pointer<Uint8>,
+              int,
+              Pointer<Uint8>,
+              int,
+            )
+          >('verify_signature');
     }
   }
 
@@ -91,7 +133,12 @@ class FalconCrypto {
       final privLenPtr2 = calloc<Uint64>();
       pubLenPtr2.value = requiredPub;
       privLenPtr2.value = requiredPriv;
-      final rc2 = _generateKeypairNative(pubBuf2, pubLenPtr2, privBuf2, privLenPtr2);
+      final rc2 = _generateKeypairNative(
+        pubBuf2,
+        pubLenPtr2,
+        privBuf2,
+        privLenPtr2,
+      );
       if (rc2 != 0) {
         calloc.free(pubBuf2);
         calloc.free(privBuf2);
@@ -101,8 +148,14 @@ class FalconCrypto {
       }
       final pubBytes = pubBuf2.asTypedList(pubLenPtr2.value.toInt());
       final privBytes = privBuf2.asTypedList(privLenPtr2.value.toInt());
-      await _secureStorage.write(key: 'falcon_pub', value: base64Encode(pubBytes));
-      await _secureStorage.write(key: 'falcon_priv', value: base64Encode(privBytes));
+      await _secureStorage.write(
+        key: 'falcon_pub',
+        value: base64Encode(pubBytes),
+      );
+      await _secureStorage.write(
+        key: 'falcon_priv',
+        value: base64Encode(privBytes),
+      );
       calloc.free(pubBuf2);
       calloc.free(privBuf2);
       calloc.free(pubLenPtr2);
@@ -123,8 +176,14 @@ class FalconCrypto {
     final pubBytes = pubBuf.asTypedList(pubLen);
     final privBytes = privBuf.asTypedList(privLen);
 
-    await _secureStorage.write(key: 'falcon_pub', value: base64Encode(pubBytes));
-    await _secureStorage.write(key: 'falcon_priv', value: base64Encode(privBytes));
+    await _secureStorage.write(
+      key: 'falcon_pub',
+      value: base64Encode(pubBytes),
+    );
+    await _secureStorage.write(
+      key: 'falcon_priv',
+      value: base64Encode(privBytes),
+    );
 
     calloc.free(pubBuf);
     calloc.free(privBuf);
@@ -154,7 +213,14 @@ class FalconCrypto {
     final msgList = msgPtr.asTypedList(challenge.length);
     msgList.setAll(0, challenge);
 
-    final rc = _signNative(privPtr, priv.length, msgPtr, challenge.length, sigBuf, sigLenPtr);
+    final rc = _signNative(
+      privPtr,
+      priv.length,
+      msgPtr,
+      challenge.length,
+      sigBuf,
+      sigLenPtr,
+    );
     if (rc != 0) {
       calloc.free(privPtr);
       calloc.free(msgPtr);
