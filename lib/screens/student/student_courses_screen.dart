@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../backend_api.dart';
 import 'student_attendance_screen.dart';
 import 'dart:math';
 
@@ -24,18 +25,12 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
   }
 
   Future<void> _loadCourses() async {
+    setState(() => _isLoading = true);
     try {
-      // For demo, we'll show all courses. In real app, filter by enrollment
-      // For now, let's create a mock list since backend doesn't have this endpoint yet
+      // Fetch all courses from backend
+      final courses = await BackendApi.instance.getAllCourses();
       setState(() {
-        _courses = [
-          {
-            'id': 1,
-            'code': 'CS101',
-            'title': 'Introduction to Computer Science',
-          },
-          {'id': 2, 'code': 'MATH201', 'title': 'Calculus I'},
-        ];
+        _courses = courses;
         _isLoading = false;
       });
     } catch (e) {

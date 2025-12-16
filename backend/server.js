@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const Database = require('better-sqlite3');
@@ -5,6 +6,13 @@ const path = require('path');
 
 const app = express();
 const PORT = 8000;
+
+
+// Get all courses (for students to browse)
+app.get('/api/courses', (req, res) => {
+  const courses = db.prepare('SELECT * FROM course ORDER BY code').all();
+  res.json(courses);
+});
 
 // Middleware
 app.use(cors());

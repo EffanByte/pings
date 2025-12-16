@@ -6,6 +6,28 @@ import 'package:http/http.dart' as http;
 import 'constants.dart';
 
 class BackendApi {
+  /// Get all courses (for students to browse)
+  Future<List<Map<String, dynamic>>> getAllCourses() async {
+    final uri = Uri.parse('$BACKEND_BASE_URL/api/courses');
+    final resp = await http
+        .get(uri)
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception(
+              'Backend request timed out after 10 seconds. Please check if the server is running at $BACKEND_BASE_URL',
+            );
+          },
+        );
+
+    if (resp.statusCode != 200) {
+      throw Exception('Failed to get courses: ${resp.statusCode} ${resp.body}');
+    }
+
+    final data = jsonDecode(resp.body) as List;
+    return data.cast<Map<String, dynamic>>();
+  }
+
   BackendApi._();
 
   static final BackendApi instance = BackendApi._();

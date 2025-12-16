@@ -15,7 +15,8 @@ class StudentScreen extends StatefulWidget {
 
 class _StudentScreenState extends State<StudentScreen> {
   final Strategy strategy = Strategy.P2P_STAR;
-  String userName = "Student_${Random().nextInt(100)}"; // Simulating unique student
+  String userName =
+      "Student_${Random().nextInt(100)}"; // Simulating unique student
   List<String> logs = [];
   String? connectedInstructorId;
 
@@ -35,8 +36,15 @@ class _StudentScreenState extends State<StudentScreen> {
     ].request();
   }
 
+  bool _isDiscovering = false;
+
   void startDiscovery() async {
+    if (_isDiscovering) {
+      _log("Already discovering. Skipping startDiscovery call.");
+      return;
+    }
     try {
+      _isDiscovering = true;
       bool a = await Nearby().startDiscovery(
         userName,
         strategy,
@@ -55,7 +63,9 @@ class _StudentScreenState extends State<StudentScreen> {
               id = endpoint;
             } else if (endpoint != null) {
               // common property names across versions
-              id = (endpoint.endpointId ?? endpoint.id ?? endpoint.toString()) as String;
+              id =
+                  (endpoint.endpointId ?? endpoint.id ?? endpoint.toString())
+                      as String;
             }
           } catch (_) {
             id = endpoint?.toString() ?? 'unknown';
@@ -70,15 +80,28 @@ class _StudentScreenState extends State<StudentScreen> {
     }
   }
 
+  void stopDiscovery() async {
+    try {
+      await Nearby().stopDiscovery();
+      _isDiscovering = false;
+      _log("Discovery stopped.");
+    } catch (e) {
+      _log("Error stopping discovery: $e");
+    }
+  }
+
   void _requestConnection(String endpointId) {
     Nearby().requestConnection(
       userName,
       endpointId,
       onConnectionInitiated: (id, info) {
         _log("Connection initiated. Accepting...");
-        Nearby().acceptConnection(id, onPayLoadRecieved: (endpointId, payload) {
-           _onPayloadReceived(endpointId, payload);
-        });
+        Nearby().acceptConnection(
+          id,
+          onPayLoadRecieved: (endpointId, payload) {
+            _onPayloadReceived(endpointId, payload);
+          },
+        );
       },
       onConnectionResult: (id, status) {
         _log("Connection Result: $status");
@@ -106,12 +129,15 @@ class _StudentScreenState extends State<StudentScreen> {
       if (msg.contains("CHALLENGE_KEY")) {
         // sign the raw challenge bytes using native Falcon via FFI
         _log("Signing challenge with Falcon-512...");
-        FalconCrypto.instance.signChallenge(Uint8List.fromList(bytes)).then((sig) {
-          Nearby().sendBytesPayload(endpointId, sig);
-          _log("Sent Falcon signature (length: ${sig.length})");
-        }).catchError((e) {
-          _log("Failed to sign challenge: $e");
-        });
+        FalconCrypto.instance
+            .signChallenge(Uint8List.fromList(bytes))
+            .then((sig) {
+              Nearby().sendBytesPayload(endpointId, sig);
+              _log("Sent Falcon signature (length: ${sig.length})");
+            })
+            .catchError((e) {
+              _log("Failed to sign challenge: $e");
+            });
       }
     }
   }
@@ -119,10 +145,10 @@ class _StudentScreenState extends State<StudentScreen> {
   void _sendAttendance(String endpointId) {
     // Future integration: Sign the challenge with Falcon-512 here
     String payload = "$userName - PRESENT - [SignedHash]";
-    
+
     Nearby().sendBytesPayload(
-      endpointId, 
-      Uint8List.fromList(payload.codeUnits)
+      endpointId,
+      Uint8List.fromList(payload.codeUnits),
     );
     _log("Sent Attendance Payload");
   }
@@ -145,9 +171,13 @@ class _StudentScreenState extends State<StudentScreen> {
             child: ElevatedButton(
               onPressed: connectedInstructorId == null ? startDiscovery : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: connectedInstructorId == null ? Colors.blue : Colors.green
+                backgroundColor: connectedInstructorId == null
+                    ? Colors.blue
+                    : Colors.green,
               ),
-              child: Text(connectedInstructorId == null ? "Scan for Class" : "Connected"),
+              child: Text(
+                connectedInstructorId == null ? "Scan for Class" : "Connected",
+              ),
             ),
           ),
           Expanded(
@@ -160,7 +190,7 @@ class _StudentScreenState extends State<StudentScreen> {
                 ),
               ),
             ),
-          )
+          ),
         ],
       ),
     );
