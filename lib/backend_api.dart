@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'constants.dart';
 
@@ -31,6 +32,26 @@ class BackendApi {
   BackendApi._();
 
   static final BackendApi instance = BackendApi._();
+
+  static const _storageKeyDeviceId = 'device_id';
+  static final FlutterSecureStorage _secureStorage = FlutterSecureStorage();
+
+  /// Returns a stable device id stored in secure storage, or creates one.
+  static Future<String> getOrCreateDeviceId() async {
+    final existing = await _secureStorage.read(key: _storageKeyDeviceId);
+    if (existing != null && existing.isNotEmpty) return existing;
+    // Use a simple stable token — avoid adding new dependencies for UUID.
+    final rnd = DateTime.now().microsecondsSinceEpoch.toRadixString(36) + '_' + DateTime.now().millisecondsSinceEpoch.toString();
+    await _secureStorage.write(key: _storageKeyDeviceId, value: rnd);
+    return rnd;
+  }
+
+  /// Read the stored device id if present, otherwise return null.
+  static Future<String?> getDeviceId() async {
+    final existing = await _secureStorage.read(key: _storageKeyDeviceId);
+    if (existing == null || existing.isEmpty) return null;
+    return existing;
+  }
 
   /// Create a new session for a given course + teacher.
   /// Returns the created session id.
@@ -199,5 +220,38 @@ class BackendApi {
 
     final data = jsonDecode(resp.body) as List;
     return data.cast<Map<String, dynamic>>();
+  }
+
+  /// Register a student with the backend. `publicKeyBytes` should be the raw
+  /// Falcon public key bytes — the method will Base64-encode them.
+  Future<Map<String, dynamic>> registerStudent({
+    required String deviceId,
+    required String name,
+    required Uint8List publicKeyBytes,
+  }) async {
+    final uri = Uri.parse('$BACKEND_BASE_URL/api/students/register');
+    final resp = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'device_id': deviceId,
+            'name': name,
+            'falcon_public_key_b64': base64Encode(publicKeyBytes),
+          }),
+        )
+        .timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw Exception('Backend request timed out after 10 seconds');
+          },
+        );
+
+    if (resp.statusCode != 200 && resp.statusCode != 201) {
+      throw Exception('Failed to register student: ${resp.statusCode} ${resp.body}');
+    }
+
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
+    return data;
   }
 }
