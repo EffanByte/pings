@@ -34,6 +34,7 @@ class BackendApi {
   static final BackendApi instance = BackendApi._();
 
   static const _storageKeyDeviceId = 'device_id';
+  static const _storageKeyStudentName = 'student_name';
   static final FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   /// Returns a stable device id stored in secure storage, or creates one.
@@ -51,6 +52,39 @@ class BackendApi {
     final existing = await _secureStorage.read(key: _storageKeyDeviceId);
     if (existing == null || existing.isEmpty) return null;
     return existing;
+  }
+
+  /// Store student name in secure storage.
+  static Future<void> setStudentName(String name) async {
+    await _secureStorage.write(key: _storageKeyStudentName, value: name);
+  }
+
+  /// Retrieve the stored student name.
+  static Future<String?> getStudentName() async {
+    final existing = await _secureStorage.read(key: _storageKeyStudentName);
+    if (existing != null && existing.isNotEmpty) return existing;
+    
+    // Fallback: fetch from backend using device_id
+    try {
+      final deviceId = await getDeviceId();
+      if (deviceId == null) return null;
+      
+      final uri = Uri.parse('$BACKEND_BASE_URL/api/students/$deviceId');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final name = data['name'] as String?;
+        if (name != null) {
+          // Cache it locally for next time
+          await _secureStorage.write(key: _storageKeyStudentName, value: name);
+        }
+        return name;
+      }
+    } catch (_) {
+      // Silently fail and return null
+    }
+    return null;
   }
 
   /// Create a new session for a given course + teacher.

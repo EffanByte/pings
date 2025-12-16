@@ -299,10 +299,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
           if (pub == null) throw Exception('Failed to obtain public key');
 
           final deviceId = await BackendApi.getOrCreateDeviceId();
+          final name = _nameController.text.trim();
+
+          // Store student name locally for later retrieval
+          await BackendApi.setStudentName(name);
 
           await BackendApi.instance.registerStudent(
             deviceId: deviceId,
-            name: _nameController.text.trim(),
+            name: name,
             publicKeyBytes: Uint8List.fromList(pub),
           );
 

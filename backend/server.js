@@ -102,7 +102,7 @@ const initializeDatabase = async () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         course_id INTEGER NOT NULL,
         student_id INTEGER NOT NULL,
-        enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        enrolled_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (course_id) REFERENCES course(id),
         FOREIGN KEY (student_id) REFERENCES student(id),
         UNIQUE(course_id, student_id)
@@ -209,6 +209,17 @@ app.post('/api/students/register', async (req, res) => {
 
     const result = await dbRun('INSERT INTO student (device_id, name, falcon_public_key_b64) VALUES (?, ?, ?)', [device_id, name, falcon_public_key_b64]);
     res.json({ id: result.lastInsertRowid, device_id, name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 3b. GET STUDENT by device_id
+app.get('/api/students/:device_id', async (req, res) => {
+  try {
+    const student = await dbGet('SELECT id, device_id, name FROM student WHERE device_id = ?', [req.params.device_id]);
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    res.json(student);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

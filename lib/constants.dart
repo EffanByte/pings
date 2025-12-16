@@ -8,7 +8,7 @@ const String INSTRUCTOR_NAME = "Ping_Instructor_Device";
 /// instructor app on an Android emulator, use "http://10.0.2.2:8000".
 /// When running on a real device, replace with your machine's LAN IP
 /// (e.g. "http://192.168.1.10:8000").
-const String BACKEND_BASE_URL = "http://10.244.20.26:8000";
+const String BACKEND_BASE_URL = "http://192.168.137.120:8000";
 /// IDs for the teacher and course that this instructor app represents.
 ///
 /// These must match rows that already exist in the backend database

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
 import '../../backend_api.dart';
 import 'student_attendance_screen.dart';
-import 'dart:math';
+ 
 
 class StudentCoursesScreen extends StatefulWidget {
   const StudentCoursesScreen({super.key});
@@ -15,13 +15,23 @@ class StudentCoursesScreen extends StatefulWidget {
 class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
   List<Map<String, dynamic>> _courses = [];
   bool _isLoading = true;
-  final String _deviceId =
-      'student_${Random().nextInt(10000)}'; // Temporary device ID
+  String? _deviceId;
 
   @override
   void initState() {
     super.initState();
     _loadCourses();
+    _initializeDeviceId();
+  }
+
+  Future<void> _initializeDeviceId() async {
+    try {
+      final id = await BackendApi.getOrCreateDeviceId();
+      setState(() => _deviceId = id);
+    } catch (e) {
+      // ignore and continue — navigation will pass empty id if unavailable
+      setState(() => _deviceId = null);
+    }
   }
 
   Future<void> _loadCourses() async {
@@ -126,7 +136,7 @@ class _StudentCoursesScreenState extends State<StudentCoursesScreen> {
                               courseId: course['id'] as int,
                               courseCode: course['code'] as String,
                               courseTitle: course['title'] as String,
-                              deviceId: _deviceId,
+                              deviceId: _deviceId ?? '',
                             ),
                           ),
                         );

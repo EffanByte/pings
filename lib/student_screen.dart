@@ -1,8 +1,9 @@
-import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+import 'backend_api.dart';
 import 'constants.dart';
 import 'crypto/falcon_ffi.dart';
 
@@ -15,15 +16,38 @@ class StudentScreen extends StatefulWidget {
 
 class _StudentScreenState extends State<StudentScreen> {
   final Strategy strategy = Strategy.P2P_STAR;
-  String userName =
-      "Student_${Random().nextInt(100)}"; // Simulating unique student
+  String? studentName;
+  String? deviceId;
   List<String> logs = [];
   String? connectedInstructorId;
+  bool _isInitializing = true;
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
+    _initializeStudent();
+  }
+
+  Future<void> _initializeStudent() async {
+    try {
+      final name = await BackendApi.getStudentName();
+      final id = await BackendApi.getDeviceId();
+      if (name == null || id == null) {
+        _log("Error: Student not initialized. Please sign up first.");
+        setState(() => _isInitializing = false);
+        return;
+      }
+      setState(() {
+        studentName = name;
+        deviceId = id;
+        _isInitializing = false;
+      });
+      _log("Initialized student: $studentName");
+    } catch (e) {
+      _log("Error initializing student: $e");
+      setState(() => _isInitializing = false);
+    }
   }
 
   void _checkPermissions() async {
@@ -36,17 +60,14 @@ class _StudentScreenState extends State<StudentScreen> {
     ].request();
   }
 
-  bool _isDiscovering = false;
-
   void startDiscovery() async {
-    if (_isDiscovering) {
-      _log("Already discovering. Skipping startDiscovery call.");
+    if (deviceId == null) {
+      _log("Error: Device ID not initialized. Cannot start discovery.");
       return;
     }
     try {
-      _isDiscovering = true;
       bool a = await Nearby().startDiscovery(
-        userName,
+        deviceId!,
         strategy,
         onEndpointFound: (String id, String name, String serviceId) {
           if (serviceId == SERVICE_ID) {
@@ -83,7 +104,6 @@ class _StudentScreenState extends State<StudentScreen> {
   void stopDiscovery() async {
     try {
       await Nearby().stopDiscovery();
-      _isDiscovering = false;
       _log("Discovery stopped.");
     } catch (e) {
       _log("Error stopping discovery: $e");
@@ -92,7 +112,7 @@ class _StudentScreenState extends State<StudentScreen> {
 
   void _requestConnection(String endpointId) {
     Nearby().requestConnection(
-      userName,
+      deviceId ?? 'Student',
       endpointId,
       onConnectionInitiated: (id, info) {
         _log("Connection initiated. Accepting...");
@@ -109,6 +129,18 @@ class _StudentScreenState extends State<StudentScreen> {
           setState(() {
             connectedInstructorId = id;
           });
+          // Send our registered device id/name to the instructor so the
+          // instructor can correlate Nearby endpoint -> registered student.
+          try {
+            final info = jsonEncode({
+              'device_id': deviceId,
+              'name': studentName,
+            });
+            Nearby().sendBytesPayload(id, Uint8List.fromList(info.codeUnits));
+            _log('Sent device identifier to instructor');
+          } catch (e) {
+            _log('Failed to send device identifier: $e');
+          }
         }
       },
       onDisconnected: (id) {
@@ -144,7 +176,7 @@ class _StudentScreenState extends State<StudentScreen> {
 
   void _sendAttendance(String endpointId) {
     // Future integration: Sign the challenge with Falcon-512 here
-    String payload = "$userName - PRESENT - [SignedHash]";
+    String payload = "$studentName - PRESENT - [SignedHash]";
 
     Nearby().sendBytesPayload(
       endpointId,
@@ -163,7 +195,7 @@ class _StudentScreenState extends State<StudentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Ping: Student ($userName)")),
+      appBar: AppBar(title: Text("Ping: Student (${studentName ?? 'Not initialized'})")),
       body: Column(
         children: [
           Padding(
